@@ -1,5 +1,6 @@
 use crate::compute_graph::ComputeGraph;
 use crate::defs::Status;
+use crate::memory_manager::MemoryBlock;
 use crate::tensor::Tensor;
 
 pub enum BackendDeviceType {
@@ -26,51 +27,57 @@ pub struct BackendDeviceProps {
 
 // BackendBuffer = ggml_backend_buffer_type + ggml_backend_buffer
 pub trait BackendBuffer: Send + Sync {
-    fn as_ptr(&self) -> *mut u8;
+    pub fn as_ptr(&self) -> *mut u8;
 
-    fn device(&self) -> Box<dyn BackendDevice>;
+    pub fn device(&self) -> Box<dyn BackendDevice>;
 
-    fn get_base(&self) -> *mut u8;
+    pub fn get_base(&self) -> MemoryBlock;
 
-    fn clear(&self, value: u8);
+    pub fn clear(&self, value: u8);
 
-    fn reset(&self);
+    pub fn reset(&self);
+
+    pub fn allocate_tensor(&self, tensor: Tensor, memory_block: MemoryBlock) {}
+
+    pub fn init_tensor(&self, tensor: Tensor);
+
+    pub fn memset_tensor(&self, tensor: Tensor, value: u8, offset: usize, size: usize);
+
+    pub fn set_tensor(&self, tensor: Tensor, data: *mut u8, offset: usize, size: usize);
+
+    pub fn get_tensor(&self, tensor: Tensor, data: *mut u8, offset: usize, size: usize);
+
+    pub fn copy_tensor(&self, src: Tensor, dst: Tensor);
+
+    pub fn buffer_allocator(&self) -> Box<dyn BackendBufferAllocator>;
 }
 
 pub trait BackendBufferAllocator {
-    fn allocate_buffer(&self, size: usize) -> Box<dyn BackendBuffer>;
+    pub fn allocate_buffer(&self, size: usize) -> Box<dyn BackendBuffer>;
 
-    fn alignment(&self) -> usize {
+    pub fn alignment(&self) -> usize {
         std::mem::align_of::<usize>()
     }
 
-    fn max_size(&self) -> usize {
+    pub fn max_size(&self) -> usize {
         usize::MAX
     }
 
-    fn alloc_size(&self, tensor: Tensor) -> usize;
+    pub fn alloc_size(&self, tensor: Tensor) -> usize;
+
+    pub fn size(&self) -> usize;
 }
 
 pub trait Backend {
     type Device: BackendDevice;
 
-    fn get_name(&self) -> &str;
+    pub fn get_name(&self) -> &str;
 
     fn synchronize(&self);
 
     fn graph_compute(&self, graph: &mut ComputeGraph) -> Status;
 
     fn memcpy_async(&self, dst: *mut u8, src: *const u8, size: usize);
-
-    fn init_tensor(&self, tensor: Tensor);
-
-    fn memset_tensor(&self, tensor: Tensor, value: u8, offset: usize, size: usize);
-
-    fn set_tensor(&self, tensor: Tensor, data: *mut u8, offset: usize, size: usize);
-
-    fn get_tensor(&self, tensor: Tensor, data: *mut u8, offset: usize, size: usize);
-
-    fn copy_tensor(&self, src: Tensor, dst: Tensor);
 
     fn set_tensor_async(&self, tensor: Tensor, data: *mut u8, offset: usize, size: usize);
 
